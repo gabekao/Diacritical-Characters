@@ -3,8 +3,10 @@ import pickle
 root = os.path.dirname(__file__)
 pickle_dir = f'{root}\\pickle'
 
+
 def split(word):
     return [char for char in word]
+
 
 if __name__ == '__main__':
     # Load pickles
