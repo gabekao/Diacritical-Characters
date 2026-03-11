@@ -1,9 +1,12 @@
 name: Release GUI EXE
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (for example: 1.0.0 or v1.0.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -29,6 +32,21 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Normalize version tag
+        id: version
+        shell: pwsh
+        run: |
+          $raw = "${{ inputs.version }}".Trim()
+          if ([string]::IsNullOrWhiteSpace($raw)) {
+            throw "Version input is required."
+          }
+          if ($raw.StartsWith("v")) {
+            $tag = $raw
+          } else {
+            $tag = "v$raw"
+          }
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
       - name: Build GUI executable
         run: |
           pyinstaller --noconfirm --clean --windowed --name DiacriticalCharacters gui.py
@@ -43,7 +61,7 @@ jobs:
         id: package
         shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
+          $tag = "${{ steps.version.outputs.tag }}"
           $zipName = "DiacriticalCharacters-$tag-windows.zip"
           Compress-Archive -Path "dist\DiacriticalCharacters\*" -DestinationPath $zipName -Force
           "zip_name=$zipName" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
@@ -51,7 +69,8 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           generate_release_notes: true
           files: ${{ steps.package.outputs.zip_name }}

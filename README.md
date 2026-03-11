@@ -60,22 +60,3 @@ Stack multiple layers in CLI:
 ```powershell
 python string_maker.py --base jordan --superscript erotic --superscript orbita
 ```
-
-## GitHub Actions EXE Build
-
-- Workflow: `.github/workflows/build-gui-exe.yml`
-- Trigger: manual (`workflow_dispatch`) or push to `main` touching app files.
-- Output: `DiacriticalCharacters-windows` artifact containing the Windows GUI build from PyInstaller.
-
-## Versioned Release Publishing
-
-- Workflow: `.github/workflows/release-gui-exe.yml`
-- Trigger: push a version tag like `v1.0.0`
-- Output: GitHub Release named by the tag, with `DiacriticalCharacters-<tag>-windows.zip` attached.
-
-Example:
-
-```powershell
-git tag v1.0.0
-git push origin v1.0.0
-```
