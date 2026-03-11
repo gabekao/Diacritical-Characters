@@ -1,75 +1,41 @@
-import collections
-import os
-import pickle
-from datetime import datetime 
-root = os.path.dirname(__file__)
-pickle_dir = f'{root}\\pickle'
-txt_dir = f'{root}\\txt'
+from __future__ import annotations
 
-def dump_output(word_list, filename):
-    with open(f'{txt_dir}\\{filename}.txt', 'w') as f:
-        for word in word_list:
-            f.write(f'{word}\n')
+import argparse
+from datetime import datetime
+from pathlib import Path
+import sys
 
-def generate_words():
-    from nltk.corpus import words
-    word_list = sorted([*set([word.lower() for word in words.words()])])
-    dump_output(word_list, 'raw_list')
-    pickle.dump(word_list, open(f'{pickle_dir}\\word_list.p', 'wb'))
+SRC_DIR = Path(__file__).resolve().parent / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
-def split(word):
-    return [char for char in word]
-    
-def filter_down(chars, filter_list):
-    # As Set
-    filter = set()
-    char = chars[0]
-    for word in filter_list:
-        if char not in word.lower():
-            filter.add(word)
-    chars.pop(0)
-    if len(chars) != 0:
-        filter = filter_down(chars, filter)
-    return filter
+from diacritical_characters import core
 
-def sort_list(word_set):
-    sorted = collections.defaultdict(dict)
-    for word in word_set:
-        word = word.lower()
-        if len(word) not in sorted.keys():
-            sorted[len(word)][word[0]] = [word]
-        if word[0] not in sorted[len(word)].keys():
-            sorted[len(word)][word[0]] = [word]
-        sorted[len(word)][word[0]].append(word)
-    return sorted
 
-if __name__ == '__main__':
-    # # Generate Word List
-    # generate_words()
-    # quit()
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Build filtered word data for diacritical suggestions.")
+    parser.add_argument(
+        "--force-generate-words",
+        action="store_true",
+        help="Regenerate word_list.p from the NLTK corpus instead of using existing data.",
+    )
+    return parser.parse_args()
 
-    # Load pickles
-    word_list = pickle.load(open(f'{pickle_dir}\\word_list.p', 'rb'))
-    superscript_dict = pickle.load(open(f'{pickle_dir}\\superscript_dict.p', 'rb'))
 
-    # Set letters
-    alphabet = split('abcdefghijklmnopqrstuvwxyz')
-    letters = split('acdehimortuvx')
-    leftover = [char for char in alphabet if char not in letters]
-    
-    # Filter words
+def main() -> int:
+    args = parse_args()
     start = datetime.now()
-    filtered = sorted(filter_down(leftover, word_list), key=str.casefold)
-    print(f'Time elapsed: {datetime.now() - start}')
-    
-    # Sort by length
-    sorted = sort_list(filtered)
-    pickle.dump(sorted, open(f'{pickle_dir}\\sorted_source.p', 'wb'))
+    result = core.build_data(force_generate_words=args.force_generate_words)
+    elapsed = datetime.now() - start
+    print(f"Time elapsed: {elapsed}")
+    print(
+        "Built data with "
+        f"{result.filtered_words} filtered words across {result.length_buckets} length buckets.\n"
+        f"Output pickle: {result.output_pickle}"
+    )
+    return 0
 
-    # Write results to file
-    with open(f'{txt_dir}\\filtered_set.txt', 'w') as f:
-        for num in range(1, max(sorted.keys())+1):
-            f.write(f'{num}: {sorted[num]}\n')
 
-    
+if __name__ == "__main__":
+    raise SystemExit(main())
 
