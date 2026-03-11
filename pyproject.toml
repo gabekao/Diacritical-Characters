@@ -11,6 +11,8 @@ requires-python = ">=3.10"
 dependencies = [
     "PySide6",
     "nltk",
+    "wordfreq",
+    "tqdm",
 ]
 
 [tool.setuptools]

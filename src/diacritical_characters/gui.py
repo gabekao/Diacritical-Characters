@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QMainWindow,
+    QProgressBar,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -20,7 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import core
+from . import core, corpus
 
 CANDIDATE_LIMIT = 400
 
@@ -28,27 +29,33 @@ CANDIDATE_LIMIT = 400
 class BuildWorker(QObject):
     finished = Signal(object)
     failed = Signal(str)
+    progress = Signal(object)
 
     def run(self) -> None:
         try:
-            result = core.build_data()
+            result = core.build_data(progress_callback=self._on_progress)
         except Exception as exc:  # noqa: BLE001
             self.failed.emit(str(exc))
             return
         self.finished.emit(result)
+
+    def _on_progress(self, progress: core.BuildProgress) -> None:
+        self.progress.emit(progress)
 
 
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Diacritical String Builder")
-        self.resize(820, 640)
+        self.resize(940, 720)
 
         self.superscript_dict: dict[str, str] = {}
-        self.suggestion_index: dict[int, dict[str, list[str]]] = {}
+        self.corpus_store = core.open_corpus_store()
         self.stacked_layers: list[str] = []
         self.worker_thread: QThread | None = None
         self.worker: BuildWorker | None = None
+        self.progress_rows: dict[str, int] = {}
+        self.completed_sources: set[str] = set()
 
         self.base_input = QLineEdit()
         self.base_input.setPlaceholderText("Base text (example: jordan)")
@@ -66,6 +73,7 @@ class MainWindow(QMainWindow):
         self.candidate_info_label.setWordWrap(True)
         self.status_label = QLabel()
         self.status_label.setWordWrap(True)
+        self.progress_label = QLabel("Build progress: idle")
 
         self.copy_button = QPushButton("Copy")
         self.copy_button.setEnabled(False)
@@ -77,6 +85,20 @@ class MainWindow(QMainWindow):
 
         self.layer_list = QListWidget()
         self.layer_list.setMinimumHeight(120)
+
+        self.build_progress_bar = QProgressBar()
+        self.build_progress_bar.setRange(0, len(corpus.available_source_ids()))
+        self.build_progress_bar.setValue(0)
+
+        self.source_progress_table = QTableWidget(0, 6)
+        self.source_progress_table.setHorizontalHeaderLabels(
+            ["Source", "Phase", "Status", "Bytes", "Records", "Elapsed"]
+        )
+        self.source_progress_table.verticalHeader().setVisible(False)
+        self.source_progress_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.source_progress_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.source_progress_table.setSelectionMode(QAbstractItemView.NoSelection)
+        self.source_progress_table.setMinimumHeight(180)
 
         self.candidate_table = QTableWidget(0, 1)
         self.candidate_table.setMinimumHeight(260)
@@ -114,6 +136,9 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.layer_list)
         layout.addWidget(self.candidate_info_label)
         layout.addWidget(self.candidate_table)
+        layout.addWidget(self.progress_label)
+        layout.addWidget(self.build_progress_bar)
+        layout.addWidget(self.source_progress_table)
         layout.addWidget(self.status_label)
 
         container = QWidget()
@@ -152,16 +177,13 @@ class MainWindow(QMainWindow):
         allowed = "".join(sorted(self.superscript_dict.keys()))
         self.allowed_label.setText(f"Allowed superscript letters: {allowed}")
 
-        try:
-            self.suggestion_index = core.load_suggestion_index()
+        if self.corpus_store.exists():
             self._set_status("Ready.", "#006400")
-        except FileNotFoundError:
-            self.suggestion_index = {}
-            self._set_status("Suggestion data not found. Click Build Data to generate it.", "#8a4d00")
+            self.progress_label.setText("Build progress: datastore found.")
             self.build_button.show()
-        except Exception as exc:  # noqa: BLE001
-            self.suggestion_index = {}
-            self._set_status(f"Could not load suggestion data: {exc}. Click Build Data to rebuild.", "#8a4d00")
+        else:
+            self._set_status("Corpus datastore not found. Click Build Data to generate it.", "#8a4d00")
+            self.progress_label.setText("Build progress: datastore missing.")
             self.build_button.show()
 
     def _on_context_changed(self) -> None:
@@ -176,7 +198,7 @@ class MainWindow(QMainWindow):
         self.candidate_table.setRowCount(0)
         self.candidate_table.setColumnCount(1)
 
-        if not self.suggestion_index:
+        if not self.corpus_store.exists():
             self.candidate_info_label.setText("Candidates unavailable until data is built.")
             return
 
@@ -187,10 +209,11 @@ class MainWindow(QMainWindow):
 
         prefix = self.layer_input.text().strip()
         candidates = core.suggest_superscript_words(
-            self.suggestion_index,
+            self.corpus_store,
             target_length=target_length,
             prefix=prefix,
             limit=CANDIDATE_LIMIT,
+            allowed_letters=self.superscript_dict.keys(),
         )
 
         if not candidates:
@@ -254,7 +277,7 @@ class MainWindow(QMainWindow):
                 self._set_status(" | ".join(errors), "#8a0000")
             else:
                 self._set_status("Add at least one layer to generate output.", "#8a4d00")
-            if not self.suggestion_index:
+            if not self.corpus_store.exists():
                 self.build_button.show()
             return
 
@@ -324,12 +347,19 @@ class MainWindow(QMainWindow):
 
         self.build_button.setEnabled(False)
         self._set_status("Building data... this may take a while.", "#005c80")
+        self.progress_label.setText("Build progress: running.")
+        self.build_progress_bar.setRange(0, len(corpus.available_source_ids()))
+        self.build_progress_bar.setValue(0)
+        self.source_progress_table.setRowCount(0)
+        self.progress_rows.clear()
+        self.completed_sources.clear()
 
         self.worker_thread = QThread(self)
         self.worker = BuildWorker()
         self.worker.moveToThread(self.worker_thread)
 
         self.worker_thread.started.connect(self.worker.run)
+        self.worker.progress.connect(self._on_build_progress)
         self.worker.finished.connect(self._on_build_finished)
         self.worker.failed.connect(self._on_build_failed)
         self.worker.finished.connect(self.worker_thread.quit)
@@ -338,31 +368,76 @@ class MainWindow(QMainWindow):
 
         self.worker_thread.start()
 
-    def _on_build_finished(self, result: object) -> None:
-        try:
-            self.suggestion_index = core.load_suggestion_index()
-        except Exception as exc:  # noqa: BLE001
-            self._set_status(f"Build completed but reloading suggestions failed: {exc}", "#8a4d00")
-            self.build_button.setEnabled(True)
-            self.build_button.show()
+    def _format_bytes(self, size: int) -> str:
+        value = float(size)
+        units = ["B", "KB", "MB", "GB", "TB"]
+        for unit in units:
+            if value < 1024 or unit == units[-1]:
+                return f"{value:.1f} {unit}"
+            value /= 1024
+        return f"{size} B"
+
+    def _ensure_progress_row(self, source_id: str) -> int:
+        row = self.progress_rows.get(source_id)
+        if row is not None:
+            return row
+        row = self.source_progress_table.rowCount()
+        self.source_progress_table.insertRow(row)
+        self.progress_rows[source_id] = row
+        for col, value in enumerate([source_id, "", "", "", "", ""]):
+            self.source_progress_table.setItem(row, col, QTableWidgetItem(value))
+        return row
+
+    def _on_build_progress(self, progress_obj: object) -> None:
+        if not isinstance(progress_obj, core.BuildProgress):
             return
+        progress = progress_obj
+        row = self._ensure_progress_row(progress.source_id)
+        self.source_progress_table.item(row, 1).setText(progress.phase)
+        self.source_progress_table.item(row, 2).setText(progress.status)
+        if progress.bytes_total:
+            bytes_text = f"{self._format_bytes(progress.bytes_downloaded)} / {self._format_bytes(progress.bytes_total)}"
+        elif progress.bytes_downloaded:
+            bytes_text = self._format_bytes(progress.bytes_downloaded)
+        else:
+            bytes_text = ""
+        self.source_progress_table.item(row, 3).setText(bytes_text)
+        self.source_progress_table.item(row, 4).setText(str(progress.records) if progress.records else "")
+        self.source_progress_table.item(row, 5).setText(f"{progress.elapsed_seconds:.1f}s" if progress.elapsed_seconds else "")
+
+        if progress.status in {"success", "failed", "skipped"}:
+            if progress.source_id not in self.completed_sources:
+                self.completed_sources.add(progress.source_id)
+                self.build_progress_bar.setValue(len(self.completed_sources))
+            if progress.message:
+                self.progress_label.setText(f"{progress.source_id}: {progress.message}")
+            else:
+                self.progress_label.setText(f"{progress.source_id}: {progress.status}")
+        else:
+            self.progress_label.setText(f"{progress.source_id}: {progress.phase} ({progress.status})")
+
+    def _on_build_finished(self, result: object) -> None:
+        self.corpus_store = core.open_corpus_store()
 
         if isinstance(result, core.BuildResult):
             self._set_status(
                 (
-                    f"Data built: {result.filtered_words} filtered words "
-                    f"across {result.length_buckets} length buckets."
+                    f"Data built: words={result.total_words}, links={result.total_word_sources}, "
+                    f"sources success={result.successful_sources}, skipped={result.skipped_sources}, failed={result.failed_sources}."
                 ),
                 "#006400",
             )
         else:
             self._set_status("Data built successfully.", "#006400")
 
-        self.build_button.hide()
+        self.progress_label.setText("Build progress: complete.")
+        self.build_progress_bar.setValue(len(corpus.available_source_ids()))
+        self.build_button.show()
         self._on_context_changed()
 
     def _on_build_failed(self, message: str) -> None:
         self._set_status(f"Build failed: {message}", "#8a0000")
+        self.progress_label.setText(f"Build progress: failed ({message})")
         self.build_button.setEnabled(True)
         self.build_button.show()
 
