@@ -54,8 +54,14 @@ jobs:
       - name: Bundle runtime data
         shell: pwsh
         run: |
-          Copy-Item -Recurse -Force pickle "dist\DiacriticalCharacters\pickle"
-          Copy-Item -Recurse -Force txt "dist\DiacriticalCharacters\txt"
+          if (-not (Test-Path "pickle\superscript_dict.p")) {
+            throw "Required runtime file missing: pickle\\superscript_dict.p"
+          }
+          New-Item -ItemType Directory -Force -Path "dist\DiacriticalCharacters\pickle" | Out-Null
+          Copy-Item -Force "pickle\superscript_dict.p" "dist\DiacriticalCharacters\pickle\superscript_dict.p"
+          if (Test-Path "data") {
+            Copy-Item -Recurse -Force data "dist\DiacriticalCharacters\data"
+          }
 
       - name: Create release package
         id: package
