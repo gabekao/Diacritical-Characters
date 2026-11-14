@@ -23,14 +23,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
-          cache-dependency-path: "requirements.txt"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
+          pip install PySide6 pyinstaller
 
       - name: Normalize version tag
         id: version
@@ -49,18 +46,18 @@ jobs:
 
       - name: Build GUI executable
         run: |
-          pyinstaller --noconfirm --clean --windowed --name DiacriticalCharacters gui.py
+          pyinstaller --noconfirm --clean DiacriticalCharacters.spec
 
-      - name: Bundle runtime data
+      - name: Smoke test executable
         shell: pwsh
         run: |
-          if (-not (Test-Path "pickle\superscript_dict.p")) {
-            throw "Required runtime file missing: pickle\\superscript_dict.p"
+          $p = Start-Process -FilePath "dist\DiacriticalCharacters\DiacriticalCharacters.exe" -ArgumentList "--smoke-test" -PassThru
+          if (-not $p.WaitForExit(60000)) {
+            Stop-Process -Id $p.Id -Force
+            throw "Executable did not exit; it is probably stuck on a startup error dialog."
           }
-          New-Item -ItemType Directory -Force -Path "dist\DiacriticalCharacters\pickle" | Out-Null
-          Copy-Item -Force "pickle\superscript_dict.p" "dist\DiacriticalCharacters\pickle\superscript_dict.p"
-          if (Test-Path "data") {
-            Copy-Item -Recurse -Force data "dist\DiacriticalCharacters\data"
+          if ($p.ExitCode -ne 0) {
+            throw "Executable exited with code $($p.ExitCode)."
           }
 
       - name: Create release package

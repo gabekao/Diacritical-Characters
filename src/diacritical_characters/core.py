@@ -1,17 +1,41 @@
 from __future__ import annotations
 
 from pathlib import Path
-import pickle
 import sys
-from typing import Callable, Iterable
+from typing import TYPE_CHECKING, Any, Callable, Iterable
 
-from . import corpus
+if TYPE_CHECKING:
+    from . import corpus
 
 DEFAULT_ALLOWED_LETTERS = "acdehimortuvx"
 DEFAULT_WORD_LIMIT = 100
 
-BuildResult = corpus.BuildResult
-BuildProgress = corpus.BuildProgress
+# Latin letters that exist as combining superscripts (U+0363..U+036F).
+SUPERSCRIPT_MAP: dict[str, str] = {
+    "a": "ͣ",
+    "e": "ͤ",
+    "i": "ͥ",
+    "o": "ͦ",
+    "u": "ͧ",
+    "c": "ͨ",
+    "d": "ͩ",
+    "h": "ͪ",
+    "m": "ͫ",
+    "r": "ͬ",
+    "t": "ͭ",
+    "v": "ͮ",
+    "x": "ͯ",
+}
+
+
+def __getattr__(name: str) -> Any:
+    # The corpus pipeline is heavy and only needed for data builds, so it is
+    # imported on demand rather than at GUI startup.
+    if name in {"BuildResult", "BuildProgress"}:
+        from . import corpus
+
+        return getattr(corpus, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def project_root() -> Path:
@@ -19,10 +43,6 @@ def project_root() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return Path(__file__).resolve().parents[2]
-
-
-def pickle_directory(root: Path | None = None) -> Path:
-    return (root or project_root()) / "pickle"
 
 
 def text_directory(root: Path | None = None) -> Path:
@@ -41,31 +61,18 @@ def corpus_database_path(root: Path | None = None) -> Path:
     return data_directory(root) / "corpus.sqlite3"
 
 
-def _read_pickle(path: Path):
-    with path.open("rb") as handle:
-        return pickle.load(handle)
-
-
 def load_superscript_dict(root: Path | None = None) -> dict[str, str]:
-    path = pickle_directory(root) / "superscript_dict.p"
-    data = _read_pickle(path)
-    if not isinstance(data, dict):
-        raise ValueError("superscript_dict.p must contain a dictionary.")
+    """Return the letter -> combining superscript mapping.
 
-    cleaned: dict[str, str] = {}
-    for key, value in data.items():
-        key_str = str(key).lower()
-        value_str = str(value)
-        if len(key_str) != 1 or len(value_str) != 1:
-            continue
-        cleaned[key_str] = value_str
-
-    if not cleaned:
-        raise ValueError("superscript_dict.p does not contain valid mappings.")
-    return cleaned
+    ``root`` is accepted for backwards compatibility and ignored; the mapping
+    used to be read from a pickle file.
+    """
+    return dict(SUPERSCRIPT_MAP)
 
 
 def open_corpus_store(root: Path | None = None) -> corpus.CorpusStore:
+    from . import corpus
+
     return corpus.CorpusStore(corpus_database_path(root))
 
 
@@ -73,12 +80,14 @@ def build_data(
     root: Path | None = None,
     *,
     full_rebuild: bool = False,
-    workers: int = corpus.DEFAULT_WORKERS,
-    min_success: int = corpus.DEFAULT_MIN_SUCCESS,
+    workers: int | None = None,
+    min_success: int | None = None,
     include_sources: Iterable[str] | None = None,
     exclude_sources: Iterable[str] | None = None,
-    progress_callback: Callable[[BuildProgress], None] | None = None,
-) -> BuildResult:
+    progress_callback: Callable[[corpus.BuildProgress], None] | None = None,
+) -> corpus.BuildResult:
+    from . import corpus
+
     root = root or project_root()
     data_directory(root).mkdir(parents=True, exist_ok=True)
     download_directory(root).mkdir(parents=True, exist_ok=True)
@@ -86,8 +95,8 @@ def build_data(
         db_path=corpus_database_path(root),
         download_dir=download_directory(root),
         full_rebuild=full_rebuild,
-        workers=workers,
-        min_success=min_success,
+        workers=corpus.DEFAULT_WORKERS if workers is None else workers,
+        min_success=corpus.DEFAULT_MIN_SUCCESS if min_success is None else min_success,
         include_sources=include_sources,
         exclude_sources=exclude_sources,
         progress_callback=progress_callback,

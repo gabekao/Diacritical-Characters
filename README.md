@@ -1,102 +1,84 @@
-# Diacritical-Characters
+# Diacritical Characters
 
-Create goofy words like `tͭͫͩrͣͣͤyͨͭͫpͪͪͦoͦͤͨgͫͫͬrͤͣͣaͭͭͭpͤͥͥhͬͨͨ` using a GUI or CLI.
+Stack tiny words on top of other words using Unicode combining letters, like
+`tͭͫͩrͣͣͤyͨͭͫpͪͪͦoͦͤͨgͫͫͬrͤͣͣaͭͭͭpͤͥͥhͬͨͨ`. The output is plain text, so it pastes anywhere
+that renders Unicode.
 
-## Project Layout
+![Screenshot of the app stacking four words on top of "jordan"](docs/screenshot.png)
 
-- `src/diacritical_characters/core.py`: shared data loading, filtering, suggestions, and composition logic.
-- `src/diacritical_characters/corpus.py`: concurrent corpus ingestion pipeline and SQLite datastore/query logic.
-- `src/diacritical_characters/gui.py`: PySide6 GUI app.
-- `setup.py`: compatibility CLI wrapper for corpus builds.
-- `string_maker.py`: CLI wrapper to compose a diacritical string.
-- `gui.py`: root launcher for the GUI.
+## How it works
 
-## Quick Start
+Unicode has combining superscript forms for exactly 13 Latin letters:
+`a c d e h i m o r t u v x`. A word can sit on top of your base text if it is
+the same length and uses only those letters. The app ships with about 29,000
+such words, ranked most common first, and shows the ones that fit.
+
+## Download
+
+Grab the latest Windows zip from
+[Releases](https://github.com/gabekao/Diacritical-Characters/releases), unzip
+it, and run `DiacriticalCharacters.exe`. Nothing else to install or download.
+
+## Using the app
+
+1. Type your base text.
+2. Hover a word to preview it; click it to add it as a layer. Stack as many as you like.
+3. Type in the filter box to narrow the list. Enter adds the top match, or
+   whatever you typed if it is a valid layer of its own.
+4. Click a layer chip to remove it, then hit **Copy**.
+
+## Run from source
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-```
-
-### Launch GUI
-
-```powershell
 python gui.py
 ```
 
-GUI flow:
-- Enter your base text.
-- Use the layer input to filter candidates by prefix (for example type `e`).
-- Browse the compact, scrollable multi-column candidate table.
-- Pick a candidate and add layers to the stack.
-- Stack as many layers as you want; output updates from stacked layers.
-
-### Build / Update Corpus Datastore
+Command line version:
 
 ```powershell
+python string_maker.py --base jordan --superscript erotic --superscript meteor
+```
+
+Tests:
+
+```powershell
+python -m unittest discover -s tests
+```
+
+## Build the executable
+
+```powershell
+pip install pyinstaller
+pyinstaller --noconfirm --clean DiacriticalCharacters.spec
+```
+
+The result is in `dist\DiacriticalCharacters\`. The **Release GUI EXE** GitHub
+Actions workflow does the same thing and publishes the zip.
+
+## Regenerating the word list
+
+You only need this to change which words are suggested. The list in
+`src/diacritical_characters/data/words.txt` is distilled from a much larger
+corpus (Hunspell, NLTK, wordfreq, Wiktionary, and web frequency lists) that is
+built into a local SQLite database:
+
+```powershell
+pip install -e .
 python -m diacritical_characters.corpus build
+python -m diacritical_characters.corpus export-wordlist
 ```
 
-Compatibility wrapper:
+The build downloads several gigabytes and takes a while. `python setup.py`
+runs the same build with a progress window; `python setup.py --help` lists the
+options (choosing sources, worker count, full rebuilds).
 
-```powershell
-python setup.py
-```
+## Project layout
 
-`setup.py` now opens a lightweight build monitor popup (per-source progress table + live log).
-Use terminal-only mode instead:
-
-```powershell
-python setup.py --cli-progress
-```
-
-Full rebuild (ignore incremental skip checks):
-
-```powershell
-python -m diacritical_characters.corpus build --full-rebuild
-```
-
-Build behavior:
-- Downloads run concurrently.
-- Processing runs concurrently (parallel parse/normalize workers), with a single serialized SQLite writer.
-- `--workers` controls both download and processing concurrency.
-- Default runs (`python setup.py` or `python -m diacritical_characters.corpus build`) skip unchanged sources using metadata.
-- `--full-rebuild` rebuilds selected sources but reuses cached download artifacts when source metadata is unchanged.
-
-Useful options:
-
-```powershell
-python setup.py --workers 8 --min-success 6
-python setup.py --source nltk_words --source wordfreq_en
-python setup.py --exclude-source wiktextract_raw
-python setup.py --db-path data\corpus.sqlite3 --download-dir downloads
-```
-
-Available source IDs:
-- `nltk_words`
-- `wordfreq_en`
-- `hunspell_en_us`
-- `hunspell_en_gb`
-- `wiktextract_raw`
-- `wiktionary_internet_lists`
-- `ccnet_en_freq`
-- `openwebtext_freq`
-
-If NLTK words are missing:
-
-```powershell
-python -m nltk.downloader words
-```
-
-### CLI Compose
-
-```powershell
-python string_maker.py --base jordan --superscript erotic
-```
-
-Stack multiple layers in CLI:
-
-```powershell
-python string_maker.py --base jordan --superscript erotic --superscript orbita
-```
+- `src/diacritical_characters/gui.py`: the PySide6 app.
+- `src/diacritical_characters/core.py`: the letter mapping and string composition.
+- `src/diacritical_characters/wordlist.py`: loads and filters the bundled word list.
+- `src/diacritical_characters/corpus.py`: the corpus build pipeline (development only).
+- `DiacriticalCharacters.spec`: PyInstaller recipe.
