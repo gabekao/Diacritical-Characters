@@ -99,6 +99,14 @@ button:disabled { opacity: 0.5; cursor: default; }
 
 #result.dimmed { opacity: 0.45; }
 
+/* With More letters on, draw the whole stack in one font that has the extra
+   letters. Left to per-character fallback, the browser takes only the columns
+   containing an extra letter from that font and the rest from Segoe UI; the
+   two place their marks differently, so the rows zigzag. */
+#result.extra-letters {
+  font-family: "Sans Serif Collection", "Noto Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
 .preview-footer {
   display: flex;
   align-items: center;

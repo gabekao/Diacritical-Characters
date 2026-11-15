@@ -250,6 +250,7 @@ function refreshResult() {
 
   el.result.textContent = text;
   el.result.classList.toggle("dimmed", dimmed);
+  el.result.classList.toggle("extra-letters", state.extended);
   // Always size for one more layer than is committed, so the text is the same
   // size whether or not a word is being previewed.
   el.result.style.setProperty("--layers", state.layers.length + 1);
