@@ -21,6 +21,11 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help="One superscript layer. Repeat this flag to stack multiple layers.",
     )
+    parser.add_argument(
+        "--extended",
+        action="store_true",
+        help="Also allow b f g k l n p s w z, which many fonts cannot display.",
+    )
     return parser.parse_args()
 
 
@@ -35,7 +40,7 @@ def _safe_print(value: str) -> None:
 def main() -> int:
     args = parse_args()
     layers = args.superscripts
-    superscript_dict = core.load_superscript_dict()
+    superscript_dict = core.load_superscript_dict(extended=args.extended)
     output, errors = core.compose_layers_or_errors(args.base, layers, superscript_dict)
 
     if errors:

@@ -29,7 +29,12 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.4 "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  /* The last two named fonts are only reached for characters the earlier ones
+     lack: they cover the extra combining letters (U+1DDA..U+1DF1), which
+     browsers do not always find on their own. Windows 11 ships "Sans Serif
+     Collection"; many Android and Linux systems have Noto Sans. */
+  font: 15px/1.4 "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial,
+    "Sans Serif Collection", "Noto Sans", sans-serif;
 }
 
 main {
@@ -156,6 +161,52 @@ button:disabled { opacity: 0.5; cursor: default; }
 
 .word:hover, .word:focus-visible { background: var(--hover); }
 
+/* --- More letters toggle and warning -------------------------------------- */
+
+.row > .toggle {
+  /* Not one of the row-heading labels above. */
+  width: auto;
+  font-weight: normal;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.toggle input { margin: 0; width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+
+dialog {
+  max-width: min(440px, calc(100vw - 32px));
+  padding: 18px 20px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+dialog::backdrop { background: rgb(0 0 0 / 0.45); }
+dialog h2 { margin: 0 0 8px; font-size: 1.1rem; }
+dialog p { margin: 0 0 10px; }
+
+.sample-stage {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 0.45em;
+  margin: 4px 0 12px;
+  padding: 22px 0 8px;
+  background: var(--bg);
+  border-radius: 6px;
+  font-size: 28px;
+  line-height: 1.6;
+}
+
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+
 footer { text-align: center; font-size: 0.9rem; }
 footer a { color: var(--accent); }
 
@@ -163,4 +214,5 @@ footer a { color: var(--accent); }
   .picker { flex-wrap: wrap; }
   .picker input[type="text"] { flex-basis: 100%; }
   .picker select, .picker button { flex: 1; }
+  .picker .toggle { flex: none; }
 }

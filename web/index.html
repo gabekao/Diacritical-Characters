@@ -43,6 +43,10 @@
         <option value="alpha">A to Z</option>
       </select>
       <button id="random" type="button" disabled>Random</button>
+      <label class="toggle" title="Also use b f g k l n p s w z. Not every device can display them.">
+        <input id="extended" type="checkbox">
+        More letters
+      </label>
     </div>
 
     <div id="words" class="words" aria-label="Words that fit"></div>
@@ -53,6 +57,29 @@
       <a href="https://github.com/gabekao/Diacritical-Characters">Source and desktop version on GitHub</a>
     </footer>
   </main>
+
+  <dialog id="extended-warning" aria-labelledby="extended-title">
+    <form method="dialog">
+      <h2 id="extended-title">Use 10 more letters?</h2>
+      <p>
+        This adds <strong>b f g k l n p s w z</strong>, so far more words fit.
+        But fewer fonts include these letters, so on many phones, apps and
+        computers they show up as empty boxes or in the wrong spot.
+      </p>
+      <p>Each letter below should have a small copy of itself on top:</p>
+      <div id="extended-sample" class="sample-stage"></div>
+      <p class="hint">
+        If yours look wrong, that's how they'll look here. Even if they look
+        right, they can still break for people you send them to.
+        j, q and y have no small form at all.
+      </p>
+      <div class="dialog-actions">
+        <button value="cancel">Cancel</button>
+        <button value="on" class="primary">Use them anyway</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="app.js"></script>
 </body>
 </html>

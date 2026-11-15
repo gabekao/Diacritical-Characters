@@ -5,9 +5,10 @@ import sys
 import time
 
 from PySide6.QtCore import QAbstractListModel, QModelIndex, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QFont, QFontMetrics, QKeyEvent, QPainter
+from PySide6.QtGui import QFont, QFontMetrics, QKeyEvent, QPainter, QRawFont
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QFrame,
     QHBoxLayout,
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QSizePolicy,
     QVBoxLayout,
@@ -25,6 +27,12 @@ from PySide6.QtWidgets import (
 
 from . import core
 from .wordlist import WordList, load_wordlist
+
+# Fonts that have the extra combining letters (U+1DDA..U+1DF1), tried in order
+# when the UI font lacks them. Windows 11 ships "Sans Serif Collection"; many
+# Linux systems have Noto Sans.
+EXTRA_LETTER_FONTS = ("Sans Serif Collection", "Noto Sans")
+_EXTRA_MARKS = frozenset(core.EXTRA_SUPERSCRIPT_MAP.values())
 
 PREVIEW_MAX_POINT_SIZE = 34
 PREVIEW_MIN_POINT_SIZE = 14
@@ -59,6 +67,27 @@ QListWidget#layerChips::item {
 }
 QListWidget#layerChips::item:hover { border-color: palette(highlight); }
 """
+
+
+def font_covering(base: QFont, text: str) -> QFont:
+    """``base``, or the first fallback font that can draw every mark in ``text``.
+
+    Qt does fall back per character when a mark is missing, but it then
+    positions the mark against a base letter from a different font and the
+    stack comes out scrambled. Drawing the whole string in one font that has
+    everything keeps the stack intact. When no installed font has the marks,
+    ``base`` is returned and they do not show, which is the honest result.
+    """
+    needed = {char for char in text if char in _EXTRA_MARKS}
+    if not needed:
+        return base
+    for family in (base.family(), *EXTRA_LETTER_FONTS):
+        font = QFont(base)
+        font.setFamily(family)
+        raw = QRawFont.fromFont(font)
+        if raw.isValid() and all(raw.supportsCharacter(ord(char)) for char in needed):
+            return font
+    return base
 
 
 class WordModel(QAbstractListModel):
@@ -179,7 +208,7 @@ class ResultView(QWidget):
 
     def _fitted_font(self) -> QFont:
         # Combining marks have no advance width, so the base text drives the fit.
-        font = QFont(self.font())
+        font = font_covering(self.font(), self._text)
         available = max(50, self.width() - 24)
         size = PREVIEW_MAX_POINT_SIZE
         while True:
@@ -218,15 +247,33 @@ class FilterEdit(QLineEdit):
         super().keyPressEvent(event)
 
 
+EXTENDED_WARNING_TEXT = """
+<p>This adds <b>{letters}</b>, so far more words fit. But fewer fonts include
+these letters, so on many phones, apps and computers they show up as empty
+boxes or in the wrong spot.</p>
+<p>Each letter below should have a small copy of itself on top:</p>
+<p align="center" style="font-size: 26pt; font-family: '{sample_family}';">{sample}</p>
+<p>If yours look wrong, that's how they'll look here. Even if they look right,
+they can still break for people you send them to. j, q and y have no small
+form at all.</p>
+"""
+
+
 class MainWindow(QMainWindow):
-    def __init__(self, wordlist: WordList | None = None) -> None:
+    def __init__(self, wordlist: WordList | None = None, extended_wordlist: WordList | None = None) -> None:
         super().__init__()
         self.setWindowTitle("Diacritical Characters")
         self.resize(860, 680)
         self.setMinimumSize(520, 460)
 
+        self.extended = False
         self.superscript_dict = core.load_superscript_dict()
-        self.wordlist = wordlist if wordlist is not None else load_wordlist()
+        # The extended list is about four times the size of the basic one, so
+        # it is only read the first time "More letters" is turned on.
+        self._wordlists: dict[bool, WordList | None] = {
+            False: wordlist if wordlist is not None else load_wordlist(),
+            True: extended_wordlist,
+        }
         self.layers: list[str] = []
         self._preview_word = ""
         self._last_pick: tuple[str, float] = ("", 0.0)
@@ -306,10 +353,16 @@ class MainWindow(QMainWindow):
         self.random_button = QPushButton("Random")
         self.random_button.setToolTip("Add a random common word as a layer")
 
+        self.extended_check = QCheckBox("More letters")
+        self.extended_check.setToolTip(
+            f"Also use {' '.join(core.EXTRA_SUPERSCRIPT_MAP)}. Not every device can display them."
+        )
+
         picker_row = QHBoxLayout()
         picker_row.addWidget(self.filter_input, 1)
         picker_row.addWidget(self.sort_combo)
         picker_row.addWidget(self.random_button)
+        picker_row.addWidget(self.extended_check)
 
         self.word_model = WordModel(self)
         self.word_grid = WordGrid()
@@ -343,6 +396,7 @@ class MainWindow(QMainWindow):
         self.filter_input.downPressed.connect(self._focus_grid)
         self.sort_combo.currentIndexChanged.connect(self._refresh_words)
         self.random_button.clicked.connect(self._add_random_layer)
+        self.extended_check.clicked.connect(self._on_extended_clicked)
         self.clear_button.clicked.connect(self._clear_layers)
         self.copy_button.clicked.connect(self._copy_result)
         self.layer_chips.itemClicked.connect(self._remove_layer_item)
@@ -365,6 +419,56 @@ class MainWindow(QMainWindow):
 
     def _mismatched_layers(self) -> list[str]:
         return [layer for layer in self.layers if len(layer) != self._target_length()]
+
+    def _unsupported_letters(self, text: str) -> list[str]:
+        return sorted({char for char in text if char not in self.superscript_dict})
+
+    def _unsupported_layers(self) -> list[str]:
+        """Layers using extra letters after "More letters" was turned back off."""
+        return [layer for layer in self.layers if self._unsupported_letters(layer)]
+
+    def _has_invalid_layers(self) -> bool:
+        return bool(self._mismatched_layers() or self._unsupported_layers())
+
+    @property
+    def wordlist(self) -> WordList:
+        current = self._wordlists[self.extended]
+        if current is None:
+            current = self._wordlists[self.extended] = load_wordlist(extended=self.extended)
+        return current
+
+    # --- More letters --------------------------------------------------------
+
+    def set_extended(self, on: bool) -> None:
+        self.extended = on
+        self.superscript_dict = core.load_superscript_dict(extended=on)
+        self.extended_check.setChecked(on)
+        self._refresh_words()
+        self._refresh_result()
+
+    def _on_extended_clicked(self, checked: bool) -> None:
+        if checked and not self._confirm_extended():
+            self.extended_check.setChecked(False)
+            return
+        self.set_extended(checked)
+
+    def _confirm_extended(self) -> bool:
+        """Warn about font support, showing a sample so people can judge."""
+        extras = core.EXTRA_SUPERSCRIPT_MAP
+        sample = "&nbsp;&nbsp;".join(letter + mark for letter, mark in extras.items())
+        box = QMessageBox(self)
+        sample_family = font_covering(box.font(), "".join(extras.values())).family()
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Use 10 more letters?")
+        box.setTextFormat(Qt.RichText)
+        box.setText(
+            EXTENDED_WARNING_TEXT.format(letters=" ".join(extras), sample=sample, sample_family=sample_family)
+        )
+        use_button = box.addButton("Use them anyway", QMessageBox.AcceptRole)
+        box.addButton(QMessageBox.Cancel)
+        box.setDefaultButton(QMessageBox.Cancel)
+        box.exec()
+        return box.clickedButton() is use_button
 
     # --- refresh -----------------------------------------------------------
 
@@ -394,9 +498,11 @@ class MainWindow(QMainWindow):
             self.status_label.setText("Type some base text to see words that fit on top of it.")
             return
 
-        unsupported = sorted({char for char in query if char not in self.superscript_dict})
+        unsupported = self._unsupported_letters(query)
         letters = f"{length} letter" + ("" if length == 1 else "s")
-        if unsupported:
+        if unsupported and not self.extended and set(unsupported) <= set(core.EXTRA_SUPERSCRIPT_MAP):
+            self.status_label.setText(f"{' '.join(unsupported)} only work with More letters turned on.")
+        elif unsupported:
             allowed = " ".join(sorted(self.superscript_dict))
             self.status_label.setText(
                 f"No superscript form exists for: {' '.join(unsupported)}. Usable letters: {allowed}"
@@ -420,8 +526,11 @@ class MainWindow(QMainWindow):
     def _refresh_result(self) -> None:
         base = self._base_text()
         mismatched = self._mismatched_layers()
+        unsupported = self._unsupported_layers()
         layers = list(self.layers)
-        previewing = bool(self._preview_word) and not mismatched and not self._layer_errors(self._preview_word)
+        previewing = (
+            bool(self._preview_word) and not self._has_invalid_layers() and not self._layer_errors(self._preview_word)
+        )
         if previewing:
             layers.append(self._preview_word)
 
@@ -436,6 +545,14 @@ class MainWindow(QMainWindow):
                 base,
                 f"Layers are {len(mismatched[0])} letters but the base is now {len(base)}. "
                 "Fix the base text or clear the layers.",
+            )
+            self.copy_button.setEnabled(False)
+            return
+        if unsupported:
+            letters = " ".join(self._unsupported_letters(unsupported[0]))
+            self._show_result(
+                base,
+                f"“{unsupported[0]}” uses {letters}. Turn More letters back on or remove that layer.",
             )
             self.copy_button.setEnabled(False)
             return
@@ -496,7 +613,7 @@ class MainWindow(QMainWindow):
 
     def add_layer(self, word: str) -> bool:
         word = word.strip().casefold()
-        if not word or self._layer_errors(word) or self._mismatched_layers():
+        if not word or self._layer_errors(word) or self._has_invalid_layers():
             return False
         self.layers.append(word)
         self.layer_chips.addItem(QListWidgetItem(f"{word}  ×"))
@@ -523,7 +640,7 @@ class MainWindow(QMainWindow):
         self._refresh_result()
 
     def _copy_result(self) -> None:
-        if not self.layers or self._mismatched_layers():
+        if not self.layers or self._has_invalid_layers():
             return
         text = core.compose_diacritical_layers(self._base_text(), self.layers, self.superscript_dict)
         QApplication.clipboard().setText(text)

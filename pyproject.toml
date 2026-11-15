@@ -22,4 +22,4 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-diacritical_characters = ["data/words.txt"]
+diacritical_characters = ["data/words.txt", "data/words_extended.txt"]

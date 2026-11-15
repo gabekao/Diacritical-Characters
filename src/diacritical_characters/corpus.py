@@ -1442,10 +1442,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     export_parser = subparsers.add_parser(
         "export-wordlist",
-        help="Regenerate the bundled GUI suggestion list from the corpus datastore.",
+        help="Regenerate the bundled suggestion lists from the corpus datastore.",
     )
     export_parser.add_argument("--db-path", help="SQLite corpus path.")
-    export_parser.add_argument("--output", help="Output text file (defaults to the packaged words.txt).")
+    export_parser.add_argument(
+        "--output-dir",
+        help="Directory for words.txt and words_extended.txt (defaults to the packaged data folder).",
+    )
 
     return parser
 
@@ -1459,8 +1462,8 @@ def main(argv: list[str] | None = None) -> int:
         from . import wordlist
 
         db_path = Path(args.db_path) if args.db_path else default_db_path()
-        count = wordlist.export_wordlist(db_path, Path(args.output) if args.output else None)
-        print(f"Exported {count} words.")
+        basic, extended = wordlist.export_wordlist(db_path, Path(args.output_dir) if args.output_dir else None)
+        print(f"Exported {basic} words to words.txt and {extended} to words_extended.txt.")
         return 0
     parser.error(f"Unsupported command: {args.command}")
     return 2

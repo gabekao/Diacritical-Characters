@@ -7,7 +7,7 @@ on:
       - master
     paths:
       - "web/**"
-      - "src/diacritical_characters/data/words.txt"
+      - "src/diacritical_characters/data/words*.txt"
       - ".github/workflows/deploy-pages.yml"
 
 permissions:
@@ -36,7 +36,7 @@ jobs:
         run: |
           mkdir _site
           cp -r web/. _site/
-          cp src/diacritical_characters/data/words.txt _site/words.txt
+          cp src/diacritical_characters/data/words.txt src/diacritical_characters/data/words_extended.txt _site/
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

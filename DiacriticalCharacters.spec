@@ -8,7 +8,10 @@ a = Analysis(
     ["gui.py"],
     # The package lives under src/, which PyInstaller does not search by default.
     pathex=["src"],
-    datas=[("src/diacritical_characters/data/words.txt", "diacritical_characters/data")],
+    datas=[
+        ("src/diacritical_characters/data/words.txt", "diacritical_characters/data"),
+        ("src/diacritical_characters/data/words_extended.txt", "diacritical_characters/data"),
+    ],
     # The GUI only needs the bundled word list. The corpus build pipeline and its
     # dependencies stay out of the executable.
     excludes=["nltk", "wordfreq", "tqdm", "diacritical_characters.corpus", "diacritical_characters.build_popup"],

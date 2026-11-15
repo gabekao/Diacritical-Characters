@@ -10,7 +10,8 @@ if TYPE_CHECKING:
 DEFAULT_ALLOWED_LETTERS = "acdehimortuvx"
 DEFAULT_WORD_LIMIT = 100
 
-# Latin letters that exist as combining superscripts (U+0363..U+036F).
+# Latin letters that exist as combining superscripts in the original block
+# (U+0363..U+036F). Nearly every font that handles combining marks has these.
 SUPERSCRIPT_MAP: dict[str, str] = {
     "a": "ͣ",
     "e": "ͤ",
@@ -26,6 +27,24 @@ SUPERSCRIPT_MAP: dict[str, str] = {
     "v": "ͮ",
     "x": "ͯ",
 }
+
+# Letters added later in Combining Diacritical Marks Supplement. Font support
+# is patchy: many systems draw them as boxes or out of place. j, q and y have
+# no combining form at all.
+EXTRA_SUPERSCRIPT_MAP: dict[str, str] = {
+    "b": "ᷨ",
+    "f": "ᷫ",
+    "g": "ᷚ",
+    "k": "ᷜ",
+    "l": "ᷝ",
+    "n": "ᷠ",
+    "p": "ᷮ",
+    "s": "ᷤ",
+    "w": "ᷱ",
+    "z": "ᷦ",
+}
+
+EXTENDED_SUPERSCRIPT_MAP: dict[str, str] = {**SUPERSCRIPT_MAP, **EXTRA_SUPERSCRIPT_MAP}
 
 
 def __getattr__(name: str) -> Any:
@@ -61,13 +80,14 @@ def corpus_database_path(root: Path | None = None) -> Path:
     return data_directory(root) / "corpus.sqlite3"
 
 
-def load_superscript_dict(root: Path | None = None) -> dict[str, str]:
+def load_superscript_dict(root: Path | None = None, *, extended: bool = False) -> dict[str, str]:
     """Return the letter -> combining superscript mapping.
 
-    ``root`` is accepted for backwards compatibility and ignored; the mapping
-    used to be read from a pickle file.
+    ``extended`` adds the ten letters with weaker font support. ``root`` is
+    accepted for backwards compatibility and ignored; the mapping used to be
+    read from a pickle file.
     """
-    return dict(SUPERSCRIPT_MAP)
+    return dict(EXTENDED_SUPERSCRIPT_MAP if extended else SUPERSCRIPT_MAP)
 
 
 def open_corpus_store(root: Path | None = None) -> corpus.CorpusStore:

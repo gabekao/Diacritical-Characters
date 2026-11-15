@@ -1,12 +1,16 @@
 """Bundled suggestion word list.
 
-The GUI only ever suggests words spelled entirely with letters that have a
-combining superscript form (13 letters). Out of the multi-million-word corpus
-that is a few tens of thousands of words, so instead of querying SQLite at
-runtime we ship them as a plain text file, ranked most-common-first, and
-filter in memory.
+The apps only suggest words spelled entirely with letters that have a
+combining superscript form. Out of the multi-million-word corpus that is a
+manageable number, so instead of querying SQLite at runtime we ship them as
+plain text files, ranked most-common-first, and filter in memory:
 
-Regenerate the file from a built corpus with:
+- ``words.txt``: words using only the 13 well-supported letters.
+- ``words_extended.txt``: every word in ``words.txt`` plus the most common
+  words that need one of the 10 extra letters (b f g k l n p s w z), in one
+  ranking. Most English words qualify, so the extras are capped.
+
+Regenerate both files from a built corpus with:
 
     python -m diacritical_characters.corpus export-wordlist
 """
@@ -21,6 +25,13 @@ import sys
 from typing import Iterable
 
 SUPERSCRIPT_LETTERS = "acdehimortuvx"
+EXTENDED_LETTERS = "abcdefghiklmnoprstuvwxz"
+
+# How many words needing an extra letter go into words_extended.txt. Around
+# this rank the list is still real words; it keeps the file near 1 MB.
+EXTRA_WORD_LIMIT = 100_000
+
+WORDLIST_FILES = {False: "words.txt", True: "words_extended.txt"}
 
 # Sources that are curated dictionaries (as opposed to raw web frequency lists).
 _DICTIONARY_SOURCES = (
@@ -33,11 +44,15 @@ _DICTIONARY_SOURCES = (
 _ZIPF_SOURCE = "wordfreq_en"
 
 
-def wordlist_path() -> Path:
+def data_dir() -> Path:
     if getattr(sys, "frozen", False):
         base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
-        return base / "diacritical_characters" / "data" / "words.txt"
-    return Path(__file__).resolve().parent / "data" / "words.txt"
+        return base / "diacritical_characters" / "data"
+    return Path(__file__).resolve().parent / "data"
+
+
+def wordlist_path(extended: bool = False) -> Path:
+    return data_dir() / WORDLIST_FILES[extended]
 
 
 class WordList:
@@ -89,24 +104,26 @@ class WordList:
         return starts + contains
 
 
-@lru_cache(maxsize=1)
-def load_wordlist() -> WordList:
-    path = wordlist_path()
+@lru_cache(maxsize=2)
+def load_wordlist(extended: bool = False) -> WordList:
+    path = wordlist_path(extended)
     with path.open("r", encoding="utf-8") as handle:
         return WordList(line.strip() for line in handle if line.strip())
 
 
-def export_wordlist(db_path: Path, output_path: Path | None = None) -> int:
-    """Write the ranked suggestion list from a built corpus database.
+def export_wordlist(db_path: Path, output_dir: Path | None = None) -> tuple[int, int]:
+    """Write both ranked suggestion lists from a built corpus database.
 
     A word is kept when it uses only superscript-capable letters and is either
     in a curated dictionary or has a wordfreq frequency. Words that appear only
     in raw web frequency lists are mostly noise ("aaaaah", typos) and dropped.
+
+    Returns the word counts of ``words.txt`` and ``words_extended.txt``.
     """
-    output_path = output_path or (Path(__file__).resolve().parent / "data" / "words.txt")
+    output_dir = output_dir or (Path(__file__).resolve().parent / "data")
     disallowed_mask = 0
     for offset in range(26):
-        if chr(ord("a") + offset) not in SUPERSCRIPT_LETTERS:
+        if chr(ord("a") + offset) not in EXTENDED_LETTERS:
             disallowed_mask |= 1 << offset
 
     dictionary_marks = ",".join("?" for _ in _DICTIONARY_SOURCES)
@@ -135,9 +152,21 @@ def export_wordlist(db_path: Path, output_path: Path | None = None) -> int:
         scored.append((score, word))
     scored.sort(key=lambda pair: (-pair[0], pair[1]))
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8", newline="\n") as handle:
-        for _score, word in scored:
-            handle.write(word + "\n")
+    basic_letters = set(SUPERSCRIPT_LETTERS)
+    basic: list[str] = []
+    extended: list[str] = []
+    extras = 0
+    for _score, word in scored:
+        if set(word) <= basic_letters:
+            basic.append(word)
+            extended.append(word)
+        elif extras < EXTRA_WORD_LIMIT:
+            extended.append(word)
+            extras += 1
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for words, is_extended in ((basic, False), (extended, True)):
+        with (output_dir / WORDLIST_FILES[is_extended]).open("w", encoding="utf-8", newline="\n") as handle:
+            handle.writelines(word + "\n" for word in words)
     load_wordlist.cache_clear()
-    return len(scored)
+    return len(basic), len(extended)
