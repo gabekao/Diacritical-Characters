@@ -4,7 +4,7 @@ Stack tiny words on top of other words using Unicode combining letters, like
 `tͭͫͩrͣͣͤyͨͭͫpͪͪͦoͦͤͨgͫͫͬrͤͣͣaͭͭͭpͤͥͥhͬͨͨ`. The output is plain text, so it pastes anywhere
 that renders Unicode.
 
-![Screenshot of the app stacking four words on top of "jordan"](docs/screenshot.png)
+![Screenshot of the app stacking four words on top of "typography"](docs/screenshot.png)
 
 ## How it works
 
@@ -13,11 +13,16 @@ Unicode has combining superscript forms for exactly 13 Latin letters:
 the same length and uses only those letters. The app ships with about 29,000
 such words, ranked most common first, and shows the ones that fit.
 
-## Download
+## Use it
 
-Grab the latest Windows zip from
+**In the browser:** <https://gabekao.github.io/Diacritical-Characters/>. Nothing
+to install, and it works on phones.
+
+**As a desktop app:** grab the latest Windows zip from
 [Releases](https://github.com/gabekao/Diacritical-Characters/releases), unzip
 it, and run `DiacriticalCharacters.exe`. Nothing else to install or download.
+
+There is also a command line tool; see [Run from source](#run-from-source).
 
 ## Using the app
 
@@ -39,7 +44,7 @@ python gui.py
 Command line version:
 
 ```powershell
-python string_maker.py --base jordan --superscript erotic --superscript meteor
+python string_maker.py --base typography --superscript decorative --superscript attractive
 ```
 
 Tests:
@@ -57,6 +62,20 @@ pyinstaller --noconfirm --clean DiacriticalCharacters.spec
 
 The result is in `dist\DiacriticalCharacters\`. The **Release GUI EXE** GitHub
 Actions workflow does the same thing and publishes the zip.
+
+## Web app
+
+The site is three static files in `web/` with no backend and no build step;
+everything runs in the browser. It reads the same word list as the desktop app.
+To try it locally, serve the repository root and open `/web/`:
+
+```powershell
+python -m http.server 8000
+```
+
+Then visit <http://localhost:8000/web/>. The **Deploy web app** workflow
+publishes it to GitHub Pages on every push to `master` that touches `web/` or
+the word list.
 
 ## Regenerating the word list
 
@@ -77,8 +96,10 @@ options (choosing sources, worker count, full rebuilds).
 
 ## Project layout
 
-- `src/diacritical_characters/gui.py`: the PySide6 app.
+- `web/`: the browser app (plain HTML, CSS and JavaScript).
+- `src/diacritical_characters/gui.py`: the PySide6 desktop app.
 - `src/diacritical_characters/core.py`: the letter mapping and string composition.
 - `src/diacritical_characters/wordlist.py`: loads and filters the bundled word list.
+- `src/diacritical_characters/data/words.txt`: the word list both apps share.
 - `src/diacritical_characters/corpus.py`: the corpus build pipeline (development only).
 - `DiacriticalCharacters.spec`: PyInstaller recipe.

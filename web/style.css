@@ -1,0 +1,166 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f3f3f3;
+  --surface: #ffffff;
+  --border: #c9c9c9;
+  --text: #1b1b1b;
+  --muted: #6b6b6b;
+  --hover: #ececf4;
+  --accent: #4b4fc4;
+  --accent-text: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1f1f1f;
+    --surface: #2b2b2b;
+    --border: #454545;
+    --text: #f2f2f2;
+    --muted: #a0a0a0;
+    --hover: #3a3a44;
+    --accent: #8f93f5;
+    --accent-text: #15152a;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.4 "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
+
+main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px 16px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+h1 { margin: 0; font-size: 1.35rem; }
+header p { margin: 2px 0 0; color: var(--muted); }
+
+.hint { color: var(--muted); font-size: 0.9rem; margin: 0; }
+
+input, select, button {
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+}
+
+button { cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: default; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* --- preview ------------------------------------------------------------- */
+
+.preview {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.result-stage {
+  /* Layers stack upward from the baseline, so anchor the text to the bottom.
+     The height is fixed: if it grew with the stack, hovering a word would
+     push the grid down and move a different word under the pointer. The
+     script shrinks the text instead when the stack gets tall. */
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 210px;
+  overflow: hidden;
+  padding: 6px 0 14px;
+}
+
+#result {
+  display: block;
+  white-space: pre;
+  font-size: 54px;
+  line-height: 1.15;
+  /* Marks draw outside the line box, so reserve their height explicitly:
+     roughly 0.4em per layer. This is what the script measures when fitting. */
+  padding-top: calc(var(--layers, 1) * 0.4em);
+}
+
+#result.dimmed { opacity: 0.45; }
+
+.preview-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* --- rows ---------------------------------------------------------------- */
+
+.row { display: flex; align-items: center; gap: 10px; }
+.row > label, .row-label { width: 52px; font-weight: 600; flex: none; }
+.row > input[type="text"] { flex: 1; min-width: 0; }
+
+.chips {
+  /* Fixed height for the same reason as the result stage: adding a layer
+     must not push the grid down. Two rows are visible; more scroll inside
+     the box, snapping so a row is never cut in half. */
+  flex: 1;
+  height: 78px;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scroll-padding: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 6px;
+  padding: 5px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.chip { border-radius: 999px; padding: 3px 12px; background: var(--bg); scroll-snap-align: start; }
+.chip span { margin-left: 6px; color: var(--muted); }
+
+/* --- word grid ----------------------------------------------------------- */
+
+.words {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--word-length, 6) * 0.62em + 28px), 1fr));
+  gap: 2px;
+  align-content: start;
+  height: 46vh;
+  min-height: 220px;
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.word {
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.word:hover, .word:focus-visible { background: var(--hover); }
+
+footer { text-align: center; font-size: 0.9rem; }
+footer a { color: var(--accent); }
+
+@media (max-width: 560px) {
+  .picker { flex-wrap: wrap; }
+  .picker input[type="text"] { flex-basis: 100%; }
+  .picker select, .picker button { flex: 1; }
+}

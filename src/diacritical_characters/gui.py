@@ -259,7 +259,7 @@ class MainWindow(QMainWindow):
 
         # --- base text + layers ---------------------------------------------
         self.base_input = QLineEdit()
-        self.base_input.setPlaceholderText("Base text, e.g. jordan")
+        self.base_input.setPlaceholderText("Type your base text")
         self.base_input.setClearButtonEnabled(True)
 
         self.layer_chips = QListWidget()

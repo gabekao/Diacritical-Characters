@@ -1,0 +1,51 @@
+name: Deploy web app
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - "web/**"
+      - "src/diacritical_characters/data/words.txt"
+      - ".github/workflows/deploy-pages.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The web app and the desktop app share one word list. It lives in the
+      # Python package; copy it next to the page for publishing.
+      - name: Assemble site
+        run: |
+          mkdir _site
+          cp -r web/. _site/
+          cp src/diacritical_characters/data/words.txt _site/words.txt
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

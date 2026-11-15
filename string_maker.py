@@ -13,11 +13,12 @@ from diacritical_characters import core
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Create a diacritical string from stacked superscript layers.")
-    parser.add_argument("--base", default="jordan", help="Base string shown as regular characters.")
+    parser.add_argument("--base", required=True, help="Base string shown as regular characters.")
     parser.add_argument(
         "--superscript",
         action="append",
         dest="superscripts",
+        required=True,
         help="One superscript layer. Repeat this flag to stack multiple layers.",
     )
     return parser.parse_args()
@@ -33,7 +34,7 @@ def _safe_print(value: str) -> None:
 
 def main() -> int:
     args = parse_args()
-    layers = args.superscripts or ["erotic"]
+    layers = args.superscripts
     superscript_dict = core.load_superscript_dict()
     output, errors = core.compose_layers_or_errors(args.base, layers, superscript_dict)
 

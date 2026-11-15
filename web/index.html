@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Diacritical Characters</title>
+  <meta name="description" content="Stack tiny words on top of other words using Unicode combining letters.">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Diacritical Characters</h1>
+      <p>Stack tiny words on top of other words. The result is plain text you can paste anywhere.</p>
+    </header>
+
+    <section class="preview" aria-label="Result">
+      <div class="result-stage">
+        <output id="result" for="base filter"></output>
+      </div>
+      <div class="preview-footer">
+        <span id="preview-hint" class="hint"></span>
+        <button id="copy" type="button" disabled>Copy</button>
+      </div>
+    </section>
+
+    <div class="row">
+      <label for="base">Base</label>
+      <input id="base" type="text" placeholder="Type your base text" autocomplete="off" autocapitalize="off" spellcheck="false" autofocus>
+    </div>
+
+    <div class="row">
+      <span class="row-label" id="layers-label">Layers</span>
+      <div id="layers" class="chips" role="list" aria-labelledby="layers-label"></div>
+      <button id="clear" type="button" disabled>Clear</button>
+    </div>
+
+    <div class="row picker">
+      <input id="filter" type="text" aria-label="Filter words" placeholder="Filter words, or type your own layer and press Enter" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <select id="sort" aria-label="Sort order">
+        <option value="common">Common first</option>
+        <option value="alpha">A to Z</option>
+      </select>
+      <button id="random" type="button" disabled>Random</button>
+    </div>
+
+    <div id="words" class="words" aria-label="Words that fit"></div>
+
+    <p id="status" class="hint" role="status"></p>
+
+    <footer>
+      <a href="https://github.com/gabekao/Diacritical-Characters">Source and desktop version on GitHub</a>
+    </footer>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

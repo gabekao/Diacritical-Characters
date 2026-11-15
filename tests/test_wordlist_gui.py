@@ -44,28 +44,28 @@ class MainWindowTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self) -> None:
-        self.window = MainWindow(WordList(["erotic", "meteor", "editor", "tomato"]))
+        self.window = MainWindow(WordList(["author", "mother", "editor", "tomato"]))
 
     def test_filter_and_stack_layers(self) -> None:
         window = self.window
-        window.base_input.setText("jordan")
+        window.base_input.setText("planet")
         self.assertEqual(window.word_model.rowCount(), 4)
 
         window.filter_input.setText("e")
-        self.assertEqual(window.word_model.words(), ["erotic", "editor", "meteor"])
+        self.assertEqual(window.word_model.words(), ["editor", "mother"])
 
         window._on_filter_return()  # not a full word, so the top match is added
-        self.assertEqual(window.layers, ["erotic"])
+        self.assertEqual(window.layers, ["editor"])
         self.assertEqual(window.filter_input.text(), "")
 
-        self.assertTrue(window.add_layer("meteor"))
-        expected = core.compose_diacritical_layers("jordan", ["erotic", "meteor"], core.SUPERSCRIPT_MAP)
+        self.assertTrue(window.add_layer("mother"))
+        expected = core.compose_diacritical_layers("planet", ["editor", "mother"], core.SUPERSCRIPT_MAP)
         self.assertEqual(window.result_view.text(), expected)
         self.assertTrue(window.copy_button.isEnabled())
 
     def test_rejects_layers_that_cannot_be_stacked(self) -> None:
         window = self.window
-        window.base_input.setText("jordan")
+        window.base_input.setText("planet")
         self.assertFalse(window.add_layer("orbita"))  # "b" has no superscript form
         self.assertFalse(window.add_layer("tomatoes"))  # wrong length
         self.assertEqual(window.layers, [])
@@ -73,7 +73,7 @@ class MainWindowTests(unittest.TestCase):
 
     def test_typed_custom_layer_is_accepted(self) -> None:
         window = self.window
-        window.base_input.setText("jordan")
+        window.base_input.setText("planet")
         window.filter_input.setText("xxxxxx")
         self.assertEqual(window.word_model.rowCount(), 0)
         window._on_filter_return()
@@ -81,12 +81,12 @@ class MainWindowTests(unittest.TestCase):
 
     def test_preview_does_not_commit(self) -> None:
         window = self.window
-        window.base_input.setText("jordan")
-        window._set_preview_word("erotic")
-        self.assertIn(core.SUPERSCRIPT_MAP["e"], window.result_view.text())
+        window.base_input.setText("planet")
+        window._set_preview_word("author")
+        self.assertIn(core.SUPERSCRIPT_MAP["a"], window.result_view.text())
         self.assertEqual(window.layers, [])
         window._set_preview_word("")
-        self.assertEqual(window.result_view.text(), "jordan")
+        self.assertEqual(window.result_view.text(), "planet")
 
 
 if __name__ == "__main__":
